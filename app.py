@@ -1,11 +1,39 @@
 import streamlit as st
 import PyPDF2
+import os
+import zipfile
+from io import BytesIO
 
 # Title of the app
-st.title("PDF Page Extractor")
+st.title("PDF Page Extractor - Folder of Individual Pages")
 
 # Upload PDF file
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+
+# Function to save all pages as separate PDFs in memory and zip them
+def save_pages_as_zip(pdf_reader, total_pages):
+    # Create an in-memory zip file
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+        for page_num in range(total_pages):
+            # Create a PdfWriter object for each page
+            pdf_writer = PyPDF2.PdfWriter()
+
+            # Add the current page
+            pdf_writer.add_page(pdf_reader.pages[page_num])
+
+            # Create a binary buffer for each PDF page
+            pdf_page_buffer = BytesIO()
+            pdf_writer.write(pdf_page_buffer)
+
+            # Write the page to the zip file with a unique name
+            pdf_page_name = f"page_{page_num + 1}.pdf"
+            zip_file.writestr(pdf_page_name, pdf_page_buffer.getvalue())
+    
+    # Reset the buffer position to the beginning
+    zip_buffer.seek(0)
+    return zip_buffer
 
 if uploaded_file is not None:
     # Read the PDF file
@@ -13,34 +41,15 @@ if uploaded_file is not None:
     total_pages = len(pdf_reader.pages)
 
     st.write(f"The PDF has {total_pages} pages.")
-    
-    # Select which page to display or extract
-    selected_page = st.number_input("Select page to extract or view", min_value=1, max_value=total_pages, value=1)
 
-    # Button to extract and display the selected page
-    if st.button("Extract and Display Page"):
-        page = pdf_reader.pages[selected_page - 1]
-        page_text = page.extract_text()
-        st.write(f"Page {selected_page} Content:")
-        st.text(page_text)
-    
-    # Option to save the selected page as a separate PDF
-    if st.button("Save Page as PDF"):
-        pdf_writer = PyPDF2.PdfWriter()
-        pdf_writer.add_page(pdf_reader.pages[selected_page - 1])
-        
-        output_filename = f"page_{selected_page}.pdf"
-        
-        # Create a binary buffer to hold the new PDF data
-        with open(output_filename, 'wb') as output_pdf:
-            pdf_writer.write(output_pdf)
+    # Button to extract and save all pages as a zip file
+    if st.button("Extract and Save All Pages as a ZIP Folder"):
+        zip_buffer = save_pages_as_zip(pdf_reader, total_pages)
 
-        st.success(f"Page {selected_page} has been saved as {output_filename}.")
-        with open(output_filename, "rb") as file:
-            btn = st.download_button(
-                label="Download Page PDF",
-                data=file,
-                file_name=output_filename,
-                mime="application/octet-stream"
-            )
-
+        # Provide a download button for the zip file
+        st.download_button(
+            label="Download ZIP Folder",
+            data=zip_buffer,
+            file_name="pdf_pages.zip",
+            mime="application/zip"
+        )
